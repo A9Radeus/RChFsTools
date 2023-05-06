@@ -1,14 +1,3 @@
-# TODO: Main features:
-# ===========================================================================================================
-# [x] Allow both prefixes, suffxies
-#       [x] Prefixes
-#       [x] Suffixes
-# [x] Use library for handling CLI flags, etc
-# [ ] Option (prolly a flag) that gives user a preview of N first files and how they would change if application
-#     runs with given arguments
-# [x] Option (prolly a flag): silent mode -- no "Done" at the end, etc
-# ===========================================================================================================
-
 import os
 import argparse
 
@@ -16,9 +5,23 @@ class ConsolePrinter:
     def __init__(self, app_args):
         self.app_args = app_args
     
-    def cprint(self, msg):
-        if self.app_args.quiet == False:
+    def print(self, msg, override_quiet = False):
+        if self.app_args.quiet == False or override_quiet == True:
             print(msg)
+
+    def input(self, msg):
+        return input(msg)
+    
+    def prompt_yes_no(self, msg, append_yn_to_msg):
+        final_msg = msg + ' [Y/N] ' if append_yn_to_msg else msg
+        result = None
+        while result == None:
+            response = input(final_msg).lower()
+            if response == 'y':
+                result = True 
+            elif response == 'n':
+                result = False 
+        return result
 
 def get_files_in_dir(dir_path_str, only_names = False):
     result = []
@@ -30,36 +33,42 @@ def get_files_in_dir(dir_path_str, only_names = False):
             result.append(os.path.join(dir, file))     
     return result
 
+# Takes in os.path ('file'), but returns string
+def append_fn_text(file, text, prefix, postfix):
+    no_ext, ext = os.path.splitext(file)
+    result = text if prefix else ''
+    result += os.fsdecode(no_ext)
+    if postfix:
+        result += text
+    result += os.fsdecode(ext)
+    return result
+
 def run_main_app(app_args):
     input_path_str = str(app_args.dir_path)
     input_path = os.fsencode(input_path_str)
     to_insert = str(app_args.str_to_insert)
-
     files_in_dir = get_files_in_dir(input_path_str, True)
 
     if len(files_in_dir) == 0:
-        printer.cprint('No files in given directory.')
+        printer.print('No files in given directory.')
         return
 
+    if app_args.preview > 0:
+        max_preview_items = min(int(app_args.preview), len(files_in_dir))
+        printer.print(f'Preview of first {max_preview_items} incoming changes:', True)
+        for i in range(0, max_preview_items):
+            file = files_in_dir[i]
+            new_fn = append_fn_text(file, to_insert, app_args.start, app_args.end)
+            printer.print('\t\'' + os.fsdecode(file) + '\'  ->  \'' + new_fn, True)
+        printer.print('\t ...', True)
+        if printer.prompt_yes_no('Proceed?', True) == False:
+            return
+
     for file in files_in_dir:
-        no_ext, ext = os.path.splitext(file)
-        
-        str_file = ''
-
-        if app_args.start:
-            str_file += to_insert
-        
-        str_file += os.fsdecode(no_ext)
-
-        if app_args.end:
-            str_file += to_insert
-        
-        str_file += os.fsdecode(ext)
-            
+        new_fn = append_fn_text(file, to_insert, app_args.start, app_args.end)
         old_path = os.path.join(input_path, file)
-        new_path = os.path.join(input_path, os.fsencode(str_file))
+        new_path = os.path.join(input_path, os.fsencode(new_fn))
         os.rename(old_path, new_path)
-
 
 if __name__ == '__main__':
     input_parser = argparse.ArgumentParser()
@@ -68,6 +77,7 @@ if __name__ == '__main__':
     input_parser.add_argument("-s", "--start", action="store_true")
     input_parser.add_argument("-e", "--end", action="store_true")
     input_parser.add_argument("-q", "--quiet", action="store_true")
+    input_parser.add_argument("-p", "--preview", action="store", type=int, required=False)
     args = input_parser.parse_args()
 
     if args.start == False and args.end == False:
@@ -78,4 +88,4 @@ if __name__ == '__main__':
 
     run_main_app(args)
     
-    printer.cprint('Done.')
+    printer.print('Done.')
