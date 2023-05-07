@@ -1,6 +1,10 @@
 import os
 import argparse
 
+# --------------------------------------------------------------------------------
+# Classes 
+# --------------------------------------------------------------------------------
+
 class ConsolePrinter:
     def __init__(self, app_args):
         self.app_args = app_args
@@ -27,6 +31,10 @@ class ConsolePrinter:
         msg = "Press \'Enter\' to continue..."
         input(msg)
 
+# --------------------------------------------------------------------------------
+# Utility functions 
+# --------------------------------------------------------------------------------
+
 def get_files_in_dir(dir_path_str, only_names = False):
     result = []
     dir = os.fsencode(dir_path_str)
@@ -37,9 +45,19 @@ def get_files_in_dir(dir_path_str, only_names = False):
             result.append(os.path.join(dir, file))     
     return result
 
-# Takes in os.path ('file'), but returns string
-def append_fn_text(file, text, prefix, postfix):
-    no_ext, ext = os.path.splitext(file)
+def get_all_invalid_paths(paths):
+    result = []
+    for path in paths:
+       if os.path.exists(path) == False:
+           result.append(path)
+    return result
+
+# Input:
+# - 'fn' -- string of file to append to
+# - 'text' -- text to append
+# - 'prefix'/'postfix' -- where to append. Both can be set to True at once
+def append_fn_text(fn, text, prefix, postfix):
+    no_ext, ext = os.path.splitext(os.fsencode(fn))
     result = text if prefix else ''
     result += os.fsdecode(no_ext)
     if postfix:
@@ -47,37 +65,38 @@ def append_fn_text(file, text, prefix, postfix):
     result += os.fsdecode(ext)
     return result
 
-def run_main_app(app_args):
-    input_path_str = str(app_args.dir_path)
-    input_path = os.fsencode(input_path_str)
-    to_insert = str(app_args.str_to_insert)
-    files_in_dir = get_files_in_dir(input_path_str, True)
+# --------------------------------------------------------------------------------
+# Main  
+# --------------------------------------------------------------------------------
 
-    if len(files_in_dir) == 0:
-        printer.print('No files in given directory.')
-        return
-
+def run_main_app(app_args, printer):
+    to_insert = str(app_args.inserted_string)
+        
     if app_args.preview > 0:
-        max_preview_items = min(int(app_args.preview), len(files_in_dir))
+        max_preview_items = min(int(app_args.preview), len(app_args.target_paths))
         printer.print(f'Preview of first {max_preview_items} incoming changes:', True)
         for i in range(0, max_preview_items):
-            file = files_in_dir[i]
+            file = app_args.target_paths[i]
             new_fn = append_fn_text(file, to_insert, app_args.start, app_args.end)
-            printer.print('\t\'' + os.fsdecode(file) + '\'  ->  \'' + new_fn, True)
+            printer.print('\t\'' + file + '\'  ->  \'' + new_fn, True)
         printer.print('\t ...', True)
         if printer.prompt_yes_no('Proceed?', True) == False:
             return
 
-    for file in files_in_dir:
+    for file in app_args.target_paths:
         new_fn = append_fn_text(file, to_insert, app_args.start, app_args.end)
-        old_path = os.path.join(input_path, file)
-        new_path = os.path.join(input_path, os.fsencode(new_fn))
+        old_path = os.fsencode(file)
+        new_path = os.fsencode(new_fn)
         os.rename(old_path, new_path)
 
+
+# TODO: Features:
+# - input_parser.add_argument("-tas", "--treat_as_dirs", action="store_true")
+# - input_parser.add_argument("-rof", "--rename_only_files", action="store_true")
 if __name__ == '__main__':
     input_parser = argparse.ArgumentParser()
-    input_parser.add_argument("dir_path")
-    input_parser.add_argument("str_to_insert")
+    input_parser.add_argument("target_paths", type=str, nargs='+')
+    input_parser.add_argument("-i", "--inserted_string", action='store', required=True)
     input_parser.add_argument("-s", "--start", action="store_true")
     input_parser.add_argument("-e", "--end", action="store_true")
     input_parser.add_argument("-q", "--quiet", action="store_true")
@@ -89,9 +108,15 @@ if __name__ == '__main__':
         print('Specify at least one of:  \'--start\', \'--end\'')
         raise SystemExit(1)
 
+    invalid_paths = get_all_invalid_paths(args.target_paths)
+    if len(invalid_paths) > 0:
+        print('[Error] following paths are invalid:')
+        for p in invalid_paths:
+            print('\t' + p)
+        raise SystemExit(2)
+
     printer = ConsolePrinter(args)
-    
-    run_main_app(args)
+    run_main_app(args, printer)
     
     printer.print('Done.')
     if args.pause_on_exit == True:
