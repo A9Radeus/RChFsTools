@@ -22,6 +22,10 @@ class ConsolePrinter:
             elif response == 'n':
                 result = False 
         return result
+    
+    def pause_until_enter(self):
+        msg = "Press \'Enter\' to continue..."
+        input(msg)
 
 def get_files_in_dir(dir_path_str, only_names = False):
     result = []
@@ -78,6 +82,7 @@ if __name__ == '__main__':
     input_parser.add_argument("-e", "--end", action="store_true")
     input_parser.add_argument("-q", "--quiet", action="store_true")
     input_parser.add_argument("-p", "--preview", action="store", type=int, default=0, required=False)
+    input_parser.add_argument("-poe", "--pause_on_exit", action="store_true")
     args = input_parser.parse_args()
 
     if args.start == False and args.end == False:
@@ -85,7 +90,9 @@ if __name__ == '__main__':
         raise SystemExit(1)
 
     printer = ConsolePrinter(args)
-
+    
     run_main_app(args)
     
     printer.print('Done.')
+    if args.pause_on_exit == True:
+        printer.pause_until_enter()
