@@ -57,13 +57,15 @@ def get_all_invalid_paths(paths):
 # - 'text' -- text to append
 # - 'prefix'/'postfix' -- where to append. Both can be set to True at once
 def append_fn_text(fn, text, prefix, postfix):
-    no_ext, ext = os.path.splitext(os.fsencode(fn))
+    os_fn = os.fsencode(fn)
+    os_fn_path, os_fn_file = os.path.split(os_fn)
+    file_wo_ext, file_ext = os.path.splitext(os_fn_file)
     result = text if prefix else ''
-    result += os.fsdecode(no_ext)
+    result += os.fsdecode(file_wo_ext)
     if postfix:
         result += text
-    result += os.fsdecode(ext)
-    return result
+    result += os.fsdecode(file_ext)
+    return os.fsdecode(os.path.join(os_fn_path, os.fsencode(result)))
 
 # --------------------------------------------------------------------------------
 # Main  
@@ -71,30 +73,33 @@ def append_fn_text(fn, text, prefix, postfix):
 
 def run_main_app(app_args, printer):
     to_insert = str(app_args.inserted_string)
-        
+
+    target_paths = []
+    if app_args.skip_directories or app_args.skip_files:    
+        target_paths = [path for path in app_args.target_paths if os.path.isfile(os.fsencode(path)) != app_args.skip_files]
+    else:
+        target_paths = app_args.target_paths
+
     if app_args.preview > 0:
-        max_preview_items = min(int(app_args.preview), len(app_args.target_paths))
+        max_preview_items = min(int(app_args.preview), len(target_paths))
         printer.print(f'Preview of first {max_preview_items} incoming changes:', True)
         for i in range(0, max_preview_items):
-            file = app_args.target_paths[i]
+            file = target_paths[i]
             new_fn = append_fn_text(file, to_insert, app_args.start, app_args.end)
             printer.print('\t\'' + file + '\'  ->  \'' + new_fn, True)
         printer.print('\t ...', True)
         if printer.prompt_yes_no('Proceed?', True) == False:
             return
 
-    for file in app_args.target_paths:
+    for file in target_paths:
         new_fn = append_fn_text(file, to_insert, app_args.start, app_args.end)
         old_path = os.fsencode(file)
         new_path = os.fsencode(new_fn)
         os.rename(old_path, new_path)
 
-
-# TODO: Features:
-# - input_parser.add_argument("-tas", "--treat_as_dirs", action="store_true")
-# - input_parser.add_argument("-rof", "--rename_only_files", action="store_true")
 if __name__ == '__main__':
     input_parser = argparse.ArgumentParser()
+    
     input_parser.add_argument("target_paths", type=str, nargs='+')
     input_parser.add_argument("-i", "--inserted_string", action='store', required=True)
     input_parser.add_argument("-s", "--start", action="store_true")
@@ -102,6 +107,11 @@ if __name__ == '__main__':
     input_parser.add_argument("-q", "--quiet", action="store_true")
     input_parser.add_argument("-p", "--preview", action="store", type=int, default=0, required=False)
     input_parser.add_argument("-poe", "--pause_on_exit", action="store_true")
+
+    input_group_skipping = input_parser.add_mutually_exclusive_group(required=True)
+    input_group_skipping.add_argument("-skdirs", "--skip_directories", action="store_true")
+    input_group_skipping.add_argument("-skfiles", "--skip_files", action="store_true")
+
     args = input_parser.parse_args()
 
     if args.start == False and args.end == False:
